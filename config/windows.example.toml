@@ -1,0 +1,20 @@
+# Replace ALL paths and service names with the actual server inventory.
+oracle_home = 'D:\app\Administrator\product\11.2.0\dbhome_1'
+tns_admin = 'D:\app\Administrator\product\11.2.0\dbhome_1\NETWORK\ADMIN'
+listener = "LISTENER"
+endpoint = "127.0.0.1:1521"
+expected_services = ["orcl"]
+listener_log = 'D:\app\Administrator\diag\tnslsnr\SERVER_NAME\listener\trace\listener.log'
+state_dir = 'D:\bh_oracle_util\state'
+max_log_bytes = 1073741824
+retention_days = 30
+log_check_seconds = 86400
+health_check_seconds = 60
+command_timeout_seconds = 30
+repair_cooldown_seconds = 1800
+recovery_checks = 6
+auto_repair = true
+# Allows a brief interruption of NEW connections if start alone cannot repair it.
+allow_restart = true
+# Optional: Oracle wallet alias must connect through this listener to the database.
+# sqlplus_wallet_alias = "ORCL_MONITOR"

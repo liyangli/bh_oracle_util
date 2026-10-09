@@ -12,3 +12,8 @@
 # Logs and temporary files
 *.log
 *.tmp
+
+# Rust and local runtime state
+/target/
+/config/local.toml
+/state/

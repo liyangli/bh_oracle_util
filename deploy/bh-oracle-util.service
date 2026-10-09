@@ -1,0 +1,15 @@
+[Unit]
+Description=Oracle listener monitor
+After=network.target
+
+[Service]
+Type=simple
+User=oracle
+Group=oinstall
+ExecStart=/opt/bh_oracle_util/bh_oracle_util --config /etc/bh_oracle_util/config.toml --watch
+Restart=on-failure
+RestartSec=30
+# Do not add NoNewPrivileges/sandbox rules blindly: lsnrctl must retain Oracle privileges.
+
+[Install]
+WantedBy=multi-user.target
