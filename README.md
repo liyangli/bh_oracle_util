@@ -48,17 +48,17 @@ Windows 可执行文件为 `target/release/bh_oracle_util.exe`，Linux 为 `targ
 先在 Oracle 所在服务器，以拥有监听管理权限的账户执行只读巡检：
 
 ```powershell
-.\bh_oracle_util.exe --config D:\bh_oracle_util\config.toml --dry-run
+.\bh_oracle_util.exe --config E:\bh_oracle_util\config.toml --dry-run
 ```
 
 `--dry-run` 不修改 Oracle、日志或恢复状态；它会创建本地状态目录及锁文件。根据输出核对路径、端口、业务服务。启用钱包探测时，钱包连接别名必须经由本配置的监听器连接业务数据库，并仅授予所需查询权限。程序不接收明文数据库密码，不打印外部命令原始输出。
 
 ```powershell
 # 单次运行：检查健康；到日志维护间隔时执行维护
-.\bh_oracle_util.exe --config D:\bh_oracle_util\config.toml
+.\bh_oracle_util.exe --config E:\bh_oracle_util\config.toml
 
 # 常驻运行：持续检查，按持久间隔维护日志
-.\bh_oracle_util.exe --config D:\bh_oracle_util\config.toml --watch
+.\bh_oracle_util.exe --config E:\bh_oracle_util\config.toml --watch
 ```
 
 ## Windows 自动运行
@@ -66,7 +66,7 @@ Windows 可执行文件为 `target/release/bh_oracle_util.exe`，Linux 为 `targ
 建议使用 Windows 计划任务，每 5 分钟启动单次巡检；日志维护仍按配置每 24 小时执行。以管理员身份运行安装脚本，输入实际 Oracle 监听管理账户的计划任务凭据：
 
 ```powershell
-.\deploy\install-task.ps1 -Executable D:\bh_oracle_util\bh_oracle_util.exe -Config D:\bh_oracle_util\config.toml
+.\deploy\install-task.ps1 -Executable E:\bh_oracle_util\bh_oracle_util.exe -Config E:\bh_oracle_util\config.toml
 ```
 
 脚本先运行只读检查，再注册任务，不覆盖同名任务。检查计划任务的 `LastTaskResult` 和 `state\audit.jsonl`。第一次日志维护会立即运行，此后按照完成时间间隔执行；这不是固定每天某个时刻。需要更快发现服务异常，可使用 `--watch` 并由服务管理器托管。
