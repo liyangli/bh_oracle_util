@@ -3,11 +3,16 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$Executable,
-    [Parameter(Mandatory=$true)][string]$Config,
+    [string]$Config,
     [string]$TaskName = 'BH Oracle Listener Monitor'
 )
 $ErrorActionPreference = 'Stop'
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
+if (-not $Config) { $Config = Join-Path (Split-Path $Executable) 'config.toml' }
+if (-not (Test-Path -LiteralPath $Config)) {
+    & $Executable --init-config $Config
+    if ($LASTEXITCODE -ne 0) { throw 'Oracle discovery failed. See candidate selection options --oracle-home, --tns-admin and --listener.' }
+}
 $Config = (Resolve-Path -LiteralPath $Config).Path
 if ($Executable.Contains('"') -or $Config.Contains('"')) { throw 'Invalid path quote' }
 & $Executable --config $Config --dry-run

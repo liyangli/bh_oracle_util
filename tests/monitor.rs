@@ -15,7 +15,10 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = tempfile::Builder::new()
+            .prefix("bh Oracle ")
+            .tempdir()
+            .unwrap();
         let root = temp.path().canonicalize().unwrap();
         fs::create_dir_all(root.join("bin")).unwrap();
         fs::create_dir(root.join("admin")).unwrap();
@@ -24,8 +27,18 @@ impl Fixture {
         fs::write(root.join("logs/listener.log"), "some old listener data\n").unwrap();
         let script = r##"#!/bin/sh
 case "$1" in
+status)
+  echo "Listener Parameter File   $ORACLE_HOME/admin/listener.ora"
+  echo "Listener Log File   $ORACLE_HOME/logs/listener.log"
+  echo "(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=$(cat "$ORACLE_HOME/endpoint-port")))"
+  ;;
 services)
   if [ -f "$ORACLE_HOME/down" ]; then echo 'TNS-12541: no listener'; exit 0; fi
+  if [ -f "$ORACLE_HOME/extproc-only" ]; then
+    echo 'Service "CLRExtProc" has 1 instance(s).'
+    echo '  Instance "CLRExtProc", status UNKNOWN'
+    exit 0
+  fi
   echo 'Service "orcl" has 1 instance(s).'
   echo '  Instance "orcl", status READY, has 1 handler(s) for this service...'
   ;;
@@ -56,6 +69,11 @@ esac
         fs::write(&tool, script).unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
         let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+        fs::write(
+            root.join("endpoint-port"),
+            tcp.local_addr().unwrap().port().to_string(),
+        )
+        .unwrap();
         let config = format!("oracle_home = '{r}'\ntns_admin = '{r}/admin'\nlistener = 'LISTENER'\nendpoint = '{}'\nexpected_services = ['orcl']\nlistener_log = '{r}/logs/listener.log'\nstate_dir = '{r}/state'\nmax_log_bytes = 10\nretention_days = 1\nrecovery_checks = 1\ncommand_timeout_seconds = 1\n", tcp.local_addr().unwrap(), r=root.display());
         fs::write(root.join("config.toml"), config).unwrap();
         Self {
@@ -268,4 +286,79 @@ fn refuses_configuration_file_as_log() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("listener.ora is configuration"));
     assert!(!f.root.join("calls").exists());
+}
+
+#[test]
+fn discovery_generates_usable_config_without_changing_oracle() {
+    let f = Fixture::new();
+    let listener="LISTENER=(DESCRIPTION_LIST=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521))))\n";
+    fs::write(f.root.join("admin/listener.ora"), listener).unwrap();
+    let target = f.root.join("detected.toml");
+    let output = Command::new(env!("CARGO_BIN_EXE_bh_oracle_util"))
+        .arg("--init-config")
+        .arg(&target)
+        .arg("--oracle-home")
+        .arg(&f.root)
+        .arg("--tns-admin")
+        .arg(f.root.join("admin"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let c: toml::Value = toml::from_str(&fs::read_to_string(&target).unwrap()).unwrap();
+    assert_eq!(c["oracle_home"].as_str().unwrap(), f.root.to_str().unwrap());
+    assert_eq!(c["listener"].as_str(), Some("LISTENER"));
+    assert_eq!(c["expected_services"][0].as_str(), Some("orcl"));
+    assert_eq!(
+        c["endpoint"].as_str().unwrap(),
+        f._tcp.local_addr().unwrap().to_string()
+    );
+    assert!(!f.root.join("calls").exists());
+    assert_eq!(
+        fs::read_to_string(f.root.join("admin/listener.ora")).unwrap(),
+        listener
+    );
+    assert!(f.archives().is_empty());
+    assert!(Command::new(env!("CARGO_BIN_EXE_bh_oracle_util"))
+        .arg("--config")
+        .arg(&target)
+        .arg("--dry-run")
+        .status()
+        .unwrap()
+        .success());
+    let saved = fs::read(&target).unwrap();
+    let overwrite = Command::new(env!("CARGO_BIN_EXE_bh_oracle_util"))
+        .arg("--init-config")
+        .arg(&target)
+        .output()
+        .unwrap();
+    assert!(!overwrite.status.success());
+    assert_eq!(fs::read(&target).unwrap(), saved);
+}
+#[test]
+fn discovery_refuses_extproc_only_and_creates_no_config() {
+    let f = Fixture::new();
+    fs::write(
+        f.root.join("admin/listener.ora"),
+        "LISTENER=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=0.0.0.0)(PORT=1521)))\n",
+    )
+    .unwrap();
+    fs::write(f.root.join("extproc-only"), "").unwrap();
+    let target = f.root.join("detected.toml");
+    let out = Command::new(env!("CARGO_BIN_EXE_bh_oracle_util"))
+        .arg("--init-config")
+        .arg(&target)
+        .arg("--oracle-home")
+        .arg(&f.root)
+        .arg("--tns-admin")
+        .arg(f.root.join("admin"))
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("no usable business service"));
+    assert!(!target.exists());
 }

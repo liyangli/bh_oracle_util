@@ -13,12 +13,29 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+mod discovery;
 
 #[derive(Parser)]
 #[command(version, about = "Oracle listener monitoring and recovery")]
 struct Args {
-    #[arg(long)]
-    config: PathBuf,
+    #[arg(
+        long,
+        required_unless_present = "init_config",
+        conflicts_with = "init_config"
+    )]
+    config: Option<PathBuf>,
+    /// Detect the local Oracle listener and write a new configuration (no overwrite).
+    #[arg(long, conflicts_with_all = ["watch", "dry_run"])]
+    init_config: Option<PathBuf>,
+    /// Select an Oracle Home if discovery finds multiple installations.
+    #[arg(long, requires = "init_config")]
+    oracle_home: Option<PathBuf>,
+    /// Select a listener if the installation has multiple listeners.
+    #[arg(long, requires = "init_config")]
+    listener: Option<String>,
+    /// Override the discovered Oracle Net configuration directory.
+    #[arg(long, requires = "init_config")]
+    tns_admin: Option<PathBuf>,
     /// Run checks continuously; otherwise execute once (for Task Scheduler/cron).
     #[arg(long)]
     watch: bool,
@@ -27,7 +44,7 @@ struct Args {
     dry_run: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
     oracle_home: PathBuf,
@@ -625,7 +642,10 @@ fn cycle(c: &Config, state: &mut State, dry: bool) -> Result<()> {
 }
 fn main() -> Result<()> {
     let args = Args::parse();
-    let c = Config::load(&args.config)?;
+    if let Some(path) = args.init_config {
+        return discovery::initialize(&path, args.oracle_home, args.tns_admin, args.listener);
+    }
+    let c = Config::load(args.config.as_deref().context("--config required")?)?;
     fs::create_dir_all(&c.state_dir)?;
     let lock = OpenOptions::new()
         .read(true)

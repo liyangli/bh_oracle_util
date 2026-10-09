@@ -1,4 +1,5 @@
-# Replace ALL paths and service names with the actual server inventory.
+# Manual override example. Prefer: bh_oracle_util.exe --init-config config.toml
+# Replace ALL paths and service names when using this manual example.
 oracle_home = 'E:\app\Administrator\product\11.2.0\dbhome_1'
 tns_admin = 'E:\app\Administrator\product\11.2.0\dbhome_1\NETWORK\ADMIN'
 listener = "LISTENER"

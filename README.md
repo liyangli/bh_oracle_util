@@ -24,7 +24,27 @@ cargo test --locked
 
 Windows 可执行文件为 `target/release/bh_oracle_util.exe`，Linux 为 `target/release/bh_oracle_util`。GitHub Actions 在 Windows 和 Linux 上执行格式检查、Clippy、测试与 release 构建，并保存可下载的构建产物。Unix 下的模拟 Oracle 流程测试不会在 Windows 上执行；Windows 工作流包含编译和跨平台单元测试。
 
-复制 `config/windows.example.toml` 或 `config/linux.example.toml` 为本地配置。示例中的 Oracle 路径来自常见布局，`SERVER_NAME` 等占位符必须替换；不可把示例当成现场清单。实际路径可从 `lsnrctl status <listener>` 输出中确认，ADR 启用时文本日志通常位于对应 home 的 `trace/listener.log`。
+建议先自动生成现场配置，避免逐台修改盘符、Oracle Home 与主机名。
+
+```cmd
+bh_oracle_util.exe --init-config .\config.toml
+bh_oracle_util.exe --config .\config.toml --dry-run
+bh_oracle_util.exe --config .\config.toml --watch
+```
+
+首次生成时监听器必须正常响应。Windows 自动读取注册表中 Oracle 安装信息和监听服务的 ImagePath；优先选择实际监听服务对应的安装目录，过滤客户端安装。也支持 ORACLE_HOME、TNS_ADMIN、PATH；Linux 额外读取 `/etc/oratab`。然后通过本机 `listener.ora` 与 `lsnrctl status/services` 确认配置目录、监听器名称、可连接的本机 TCP 地址和业务服务名。ADR 输出为 `alert/log.xml` 时，定位同一 ADR home 的 `trace/listener.log`。状态目录自动放在生成配置旁边的 `state/<listener>`，不依赖 D/E 盘。
+
+生成过程只执行查询及短暂 TCP 探测，不启动或停止监听、不调整日志开关、不修改 Oracle 配置。配置使用新文件方式发布，禁止覆盖已有文件；已有 `config.toml` 时可用 `--init-config .\config.auto.toml`，先停止旧监测进程或旧计划任务，再把监测命令和计划任务切换到新文件，避免旧状态目录与新状态目录对应的任务同时维护同一监听器。生成后运行不再依赖现场探测，监听器停止时仍能根据已保存的路径执行自动恢复。原有手动配置继续兼容。
+
+多个 Oracle Home 或监听器时，程序列出候选并停止，可以仅指定需要的候选：
+
+```cmd
+bh_oracle_util.exe --init-config .\config.toml --oracle-home "E:\app\Administrator\product\11.2.0\dbhome_1" --listener LISTENER
+```
+
+特殊配置目录可追加 `--tns-admin "E:\OracleNetConfig"`。使用 IFILE 引用且不能直接枚举监听器时也需指定 `--listener`。发现的注册服务全部写入 `expected_services`，请核对业务范围；只有外部过程服务、没有可用业务实例或没有可连接本机 TCP 端口时不会生成配置。首次部署时监听器已停止且没有历史配置，需先恢复监听或使用手动配置，不盲猜日志和服务名。
+
+也可复制 `config/windows.example.toml` 或 `config/linux.example.toml` 为本地配置。示例中的 Oracle 路径来自常见布局，`SERVER_NAME` 等占位符必须替换；不可把示例当成现场清单。实际路径可从 `lsnrctl status <listener>` 输出中确认。
 
 | 配置项 | 作用 | 默认值 |
 | --- | --- | --- |
@@ -70,6 +90,12 @@ Windows 可执行文件为 `target/release/bh_oracle_util.exe`，Linux 为 `targ
 ```
 
 脚本先运行只读检查，再注册任务，不覆盖同名任务。检查计划任务的 `LastTaskResult` 和 `state\audit.jsonl`。第一次日志维护会立即运行，此后按照完成时间间隔执行；这不是固定每天某个时刻。需要更快发现服务异常，可使用 `--watch` 并由服务管理器托管。
+
+安装脚本也支持省略 `-Config`：默认使用可执行文件旁的 `config.toml`，文件不存在时先自动探测生成；文件存在则直接使用，不覆盖。
+
+```powershell
+.\deploy\install-task.ps1 -Executable E:\bh_oracle_util\bh_oracle_util.exe
+```
 
 停止自动运行：
 
@@ -117,3 +143,5 @@ journalctl -u bh-oracle-util -f
 - [Oracle 11g Net Services Administrator’s Guide](https://docs.oracle.com/cd/E11882_01/network.112/e41945.pdf)：静态注册的 GLOBAL_DBNAME 与客户端 SERVICE_NAME 的匹配关系。
 
 源 FAQ 原件未提交到仓库。
+
+自动探测中的 Windows 注册表读取仅经过 Windows 目标编译检查与解析器测试；实际注册表、权限和现场 Oracle 输出仍需在目标 Windows 服务器验证。
