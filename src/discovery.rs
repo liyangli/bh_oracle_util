@@ -75,7 +75,7 @@ $services = @(Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services' | ForEach-
         thread::sleep(Duration::from_millis(50));
     }
     let bytes = fs::read(path)?;
-    Ok(serde_json::from_slice(&bytes).context("parse UTF-8 Oracle registry inventory")?)
+    serde_json::from_slice(&bytes).context("parse UTF-8 Oracle registry inventory")
 }
 #[cfg(not(windows))]
 fn inventory() -> Result<Inventory> {

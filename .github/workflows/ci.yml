@@ -5,6 +5,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -15,6 +16,11 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Check Windows-only Rust code on Linux
+        if: runner.os == 'Linux'
+        run: |
+          rustup target add x86_64-pc-windows-gnu
+          cargo clippy --locked --target x86_64-pc-windows-gnu --all-targets -- -D warnings
       - run: cargo test --locked
       - run: cargo build --locked --release
       - uses: actions/upload-artifact@v4
