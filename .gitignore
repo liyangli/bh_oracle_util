@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+._*
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and temporary files
+*.log
+*.tmp
